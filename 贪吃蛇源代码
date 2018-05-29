@@ -1,0 +1,380 @@
+
+// 贪吃蛇.cpp: 定义控制台应用程序的入口点。
+/*
+作者：袁依同。
+日志：
+1.0（2018年1月29日）
+-基本的功能
+1.2（2018年1月30日）
+-逐渐加速
+-把难度调合理了一点
+-可以不退出程序就再开一局
++遗留问题：_getch()貌似也有缓存区的问题
++新问题：sleep挂起机制，会造成按键延迟。临时解决思路，一检测到按键就立马动一下//To do
+*/
+
+#include "stdafx.h"
+#include "graphics.h"
+#include <conio.h>
+#include <iostream> 
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <time.h>
+
+#define move 5 //一次移动的距离
+#define len_map_x 1300 //地图边长
+#define len_map_y 500 //地图边长
+#define len_box 5//一节身体的边长
+#define speed 100 //速度，表现为挂起的时间
+#define len_struct sizeof(struct sneak) //一个蛇方块struct所占内存
+
+int len = 0;//蛇的长度
+int direction = 4;//方向，1上、2下、3左、4右。初始化是向右
+
+float speed_plus = 1;//加速参数
+int speed_up = 1;//防止反复加速，1为可以加速状态
+
+int food_flag = 1;//场上是否有食物
+int food_x = len_box * 10;//食物的位置
+int food_y = len_box * 10;//食物的位置
+
+int Game_flag = 0;//本次打开游戏之后结束的游戏局数
+
+
+				  //蛇的一节身体
+struct sneak
+{
+	int x;//方块左上角的坐标
+	int y;
+	int	len;//一节身体的边长
+	struct sneak *next;
+};
+
+struct sneak *head, *p1, *p2;
+
+//初始化
+void sneakbaby() {
+	head = NULL;
+	direction = 4;
+	food_x = len_box * 10;
+	food_y = len_box * 10;
+	speed_plus = 1;
+	for (len = 1; len < 3; len++)//初始化三段
+	{
+		p1 = (struct sneak*)malloc(len_struct);
+		if (len == 1)
+		{
+			head = p2 = p1;
+		}
+		else {
+			p2->next = p1;
+		}
+		p1->len = len_box;
+		p1->x = (3 - len)*len_box;
+		p1->y = 0;
+		p2 = p1;
+	}
+	p2->next = NULL;
+}
+
+//显示
+void draw() {
+	struct sneak *out = head;
+	cleardevice();
+	if (out != NULL)
+	{
+		do {
+			rectangle(out->x, out->y, out->x + len_box, out->y + len_box);
+			out = out->next;
+		} while (out != NULL);
+	}
+	solidcircle(food_x + len_box*0.5, food_y + len_box*0.5, len_box*0.5);
+	Sleep(speed*speed_plus);
+}
+
+//加框输出
+void printPlus(char *ch) {
+	int len = 0;
+	while (*(ch + len) != '\0')
+	{
+		len++;
+	}
+	len += 4;
+	printf("\n");
+	for (int i = 0; i < len; i++) {
+		printf("+");
+	}
+
+	printf("\n+");
+	for (int i = 0; i < len - 2; i++)
+	{
+		printf(" ");
+	}
+	printf("+");
+
+	printf("\n+ %s +\n", ch);
+
+	printf("+");
+	for (int i = 0; i < len - 2; i++) {
+		printf(" ");
+	}
+	printf("+\n");
+
+	for (int i = 0; i < len; i++)
+	{
+		printf("+");
+	}
+	printf("\n");
+}
+
+
+int check_qiang() {
+	struct sneak *check = head;
+	if (check->x >= 0 && check->x <= len_map_x - check->len && check->y >= 0 && check->y <= len_map_y - check->len)
+	{
+		return 0;
+	}
+	return 1;
+}
+
+int check_yaoziji() {
+	struct sneak *p1, *p2;
+	p1 = head;
+	p2 = p1->next;
+	do
+	{
+		if (abs(p1->x - p2->x) < len_box && abs(p1->y - p2->y) < len_box)
+		{
+			return 1;
+		}
+		p2 = p2->next;
+	} while (p2 != NULL);
+	return 0;
+}
+
+//检测是否存活（撞墙、咬自己）
+int check_alive() {
+	if (check_qiang() == 0 && check_yaoziji() == 0)
+	{
+		return 1;
+	}
+	return 0;
+}
+
+//删尾添头（移动）
+void go() {
+	char ch = 0;
+
+	//填头
+	struct sneak *newhead = (struct sneak*)malloc(len_struct);
+	newhead->x = head->x;
+	newhead->y = head->y;
+	newhead->len = head->len;
+	newhead->next = head;
+	if (_kbhit())
+	{
+		switch (ch = _getch())
+		{
+		case 75:
+			if (direction != 4)
+			{
+				direction = 3;
+			}
+			break;
+		case 80:
+			if (direction != 1)
+			{
+				direction = 2;
+			}
+			break;
+		case 77:
+			if (direction != 3)
+			{
+				direction = 4;
+			}
+			break;
+		case 72:
+			if (direction != 2)
+			{
+				direction = 1;
+			}
+			break;
+		case 'a'://外挂！按a可以减速。
+			speed_plus *= 1.5;
+			break;
+		case 's'://外挂！按s可以加速。
+			speed_plus *= 0.5;
+			break;
+		default:break;
+		}
+	}
+	switch (direction)
+	{
+	case 1:newhead->y = head->y - len_box; break;
+	case 2:newhead->y = head->y + len_box; break;
+	case 3:newhead->x = head->x - len_box; break;
+	case 4:newhead->x = head->x + len_box; break;
+	default:
+		break;
+	}
+	head = newhead;
+
+	//去尾
+	struct sneak *tail = head;
+	for (int i = 0; i < len - 1; i++)
+	{
+		tail = tail->next;
+	}
+	tail->next = NULL;
+}
+
+void newfood() {
+	int flag_onTheBody = 0;//不能在身体上生成食物
+	food_x = ((rand() % len_map_x) / len_box)*len_box;
+	food_y = ((rand() % len_map_y) / len_box)*len_box;
+	struct sneak *p = head;
+	do
+	{
+		if (p->x == food_x && p->y == food_y)
+		{
+			flag_onTheBody = 1;
+			break;
+		}
+		p = p->next;
+	} while (p != NULL);
+	if (flag_onTheBody)
+	{
+		newfood();
+	}
+}
+
+
+int eat() {
+
+	if (head->x == food_x && head->y == food_y)
+	{
+		struct sneak *newhead = (struct sneak*)malloc(len_struct);
+		newhead->x = head->x;
+		newhead->y = head->y;
+		newhead->len = head->len;
+		newhead->next = head;
+		switch (direction)
+		{
+		case 1:newhead->y = head->y - len_box; break;
+		case 2:newhead->y = head->y + len_box; break;
+		case 3:newhead->x = head->x - len_box; break;
+		case 4:newhead->x = head->x + len_box; break;
+		default:
+			break;
+		}
+		head = newhead;
+		food_flag = 0;
+		len++;
+		if ((len - 3) % 2 == 0 && speed_up)
+		{
+			speed_plus *= 0.9;
+			speed_up = 0;
+		}
+
+		return 1;
+	}
+	else {
+		speed_up = 1;
+	}
+	return 0;
+}
+
+//检测键盘，动一下蛇
+int	 check_keyboard() {
+	void end();
+	go();
+	if (check_alive())
+	{
+		if (eat())
+		{
+			newfood();
+		}
+		return 1;
+	}
+	else
+	{
+		for (int i = 0; 0.1*i*i < max(len_map_x, len_map_y); i++)
+		{
+			circle(head->x, head->y, 0.1*i*i);
+			Sleep(50);
+		}
+		closegraph();
+		return 0;
+	}
+}
+
+void end() {
+	cleardevice();
+	system("CLS");
+	printPlus("Game over!"); Sleep(800);
+	printf("\n\n=============\nYour goal:%d.\n=============\n", len); Sleep(2000);
+	Game_flag++;
+	printPlus("按任意键以退出本次游戏"); _getch(); fflush(stdin);
+}
+
+void start() {
+	printPlus("Hello! Welcome to \"Snake\"!"); Sleep(1000);
+	printPlus("在开始之前，请确保您整个游戏过程中输入法都为 英文小写 。"); Sleep(1000);
+	printPlus("用方向键控制蛇头的方向。"); Sleep(1000);
+	printPlus("随着蛇身的加长，蛇的速度会越来越快。"); Sleep(1000);
+	printPlus("Now start!（按任意键以开始游戏）");
+	fflush(stdin); _getch(); fflush(stdin);
+}
+
+void NewGame()
+{
+	initgraph(len_map_x, len_map_y);
+	srand(time(NULL));
+	sneakbaby();
+	food_x = len_box * 10;//食物的位置
+	food_y = len_box * 10;//食物的位置
+						  //draw();
+	while (1)
+	{
+		if (check_keyboard())
+		{
+			draw();
+		}
+		else
+		{
+			end();
+			break;
+		}
+	}
+}
+
+int welcomeInterface() {
+	if (Game_flag == 0)
+	{
+		start(); return 1;
+	}
+	printPlus("再玩一局吗？(玩-1；不玩-0）");
+	char choice = 0;
+	fflush(stdin);
+	switch (_getch())
+	{
+	case '1':return 1;
+	case '0':return 0;
+	default:
+		printPlus("请输入0或1。");
+		welcomeInterface();
+		break;
+	}
+
+}
+
+int main()
+{
+
+	while (welcomeInterface())
+	{
+		NewGame();
+	}
+	return 0;
+}
